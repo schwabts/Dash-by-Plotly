@@ -24,15 +24,46 @@ dash.register_page(__name__, path="/mongo-dash-datatable")
 
 # Connect to local server
 client = MongoClient("mongodb://127.0.0.1:27017/")
-# Create database called animals
-mydb = client["animals"]
-# Create Collection (table) called shelterA
-collection = mydb.shelterA
+# List available databases
+database_names = [db["name"] for db in client.list_databases()]
+database_selected = database_names[0]
+database = client[database_selected]
+print(f'{database_names=}')
+# List available collections (tables)
+collection_names = client[database_selected].list_collection_names()
+collection_selected = collection_names[0]
+print(f'{collection_names=}')
 
 
 # app = dash.Dash(__name__, suppress_callback_exceptions=True, external_stylesheets=['https://codepen.io/chriddyp/pen/bWLwgP.css'])
 
+# Choose database
+database_dropdown = dbc.Row(
+    [
+        dbc.Label("Database", html_for="database-row", width=2),
+        dbc.Col(
+            dcc.Dropdown(database_names, None, id=id(__name__,"database-dropdown")),
+            width=10,
+        ),
+    ],
+    className="mb-3",
+)
+# Choose collection (table)
+collection_dropdown = dbc.Row(
+    [
+        dbc.Label("Collection (table)", html_for="collection-row", width=2),
+        dbc.Col(
+            dcc.Dropdown(collection_names, None, id=id(__name__,"collection-dropdown")),
+            width=10,
+        ),
+    ],
+    className="mb-3",
+)
+
 layout = html.Div([
+
+    dbc.Form([database_dropdown, collection_dropdown]),
+    html.Div(id=id(__name__,"placeholder")),
 
     html.Div(id=id(__name__,"datatable-div"), children=[ # To be filled in
         # populate_datatable(n_itvl):
@@ -50,11 +81,67 @@ layout = html.Div([
 
 ])
 
+# rf.   [Cascading dropdowns](https://community.plotly.com/t/cascading-dropdowns/48635) and
+#       [dash-three-cascading-dropdowns.py](https://github.com/plotly/dash-recipes/blob/master/dash-three-cascading-dropdowns.py)
+@callback(
+    Output(id(__name__,"collection-dropdown"), 'children'),
+    Input(id(__name__,"database-dropdown"), 'value')
+)
+def select_database(value):
+    # return f'You have selected database {value}'
+    # TODO: update choices for collections (tables)
+
+    return
+
+
+# FIXME: In the callback for output(s):
+#           pages-mongo-database-datatable-div.children
+#       Output 0 (pages-mongo-database-datatable-div.children) is already in use.
+#       Any given output can only have one callback that sets it.
+#       To resolve this situation, try combining these into
+#       one callback function, distinguishing the trigger
+#       by using `dash.callback_context` if necessary.
+#
+# @callback(
+#     Output(id(__name__,"datatable-div"), 'children'),
+#     Input(id(__name__,"collection-dropdown"), 'value')
+# )
+# def select_database(value):
+#     # return f'You have selected colletion (table) {value}'
+#     # TODO: update table
+
+#     return
+
+def database_collection_by_names(database_name, collection_name):
+    if not database_name:
+        print(f'Unable to access database "{database_name}"')
+        return None
+    # Create database called f'{database_name}'
+    database = client[database_name]
+    if not collection_name:
+        print(f'Unable to access collection "{collection_name}"')
+        return None
+    # Create Collection (table) called f'{collection_name}'
+    collection = database[collection_name]
+    print(f'selected collection "{collection_name}" of database "{database_name}"')
+    return collection
+
 # Display Datatable with data from Mongo database *************************
 @callback(Output(id(__name__,"datatable-div"), 'children'),
-              [Input(id(__name__,"interval_db"), 'n_intervals')])
-def populate_datatable(n_intervals):
+          [
+            Input(id(__name__,"database-dropdown"), 'value'),
+            Input(id(__name__,"collection-dropdown"), 'value'),
+            Input(id(__name__,"interval_db"), 'n_intervals'),
+          ])
+def populate_datatable(database_name, collection_name, n_intervals):
     print(n_intervals)
+    collection = database_collection_by_names(database_name, collection_name)
+    if collection==None:
+        return None
+    # FIXME: ValueError: Value of 'x' is not the name of a column in 'data_frame'. Expected one of [] but received: age
+    #        Empty DataFrame
+    #        Columns: []
+    #        Index: []
     # Convert the Collection (table) date to a pandas DataFrame
     df = pd.DataFrame(list(collection.find()))
     #Drop the _id column generated automatically by Mongo
